@@ -19,7 +19,7 @@ def manage_addresses():
     all_user_ids = fetch_user_ids()
     all_user_ids.append("Create New")
 
-    selected_user_id = st.selectbox("Select User ID", all_user_ids, key="user_id_selectbox")
+    selected_user_id = st.selectbox("Select User ID", all_user_ids, key="user_id_selectbox_4")
     
     # Handle new user ID creation
     if selected_user_id == "Create New":
