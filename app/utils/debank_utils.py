@@ -1,6 +1,6 @@
 import os
 from dotenv import load_dotenv
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 # Load environment variables from .env file
 load_dotenv()
@@ -14,8 +14,15 @@ headers = {
     "accept": "application/json",
     "AccessKey": DEBANK_KEY,
 }
-def to_decimal(value): 
-    return Decimal(str(value))
+def to_decimal(value):
+    if not value:
+        return None
+    try:
+        return Decimal(str(value))
+    except InvalidOperation:
+        print(f"Failed to convert value '{value}' to Decimal.")
+        return None
+
 
 def check_schema(df, expected_columns, default_value=0):
     missing_columns = set(expected_columns) - set(df.columns)
