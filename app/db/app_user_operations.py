@@ -174,69 +174,50 @@ def save_raw_data_to_db(wallet_address, raw_balance_data, raw_token_data):
         ''', (wallet_address, token['id'], to_decimal(token['amount'])))
 
 
-def get_user_data_with_chain_breakdown(user_id):
+def fetch_aggregated_data_for_user(user_id):
     """
-    Fetches a detailed breakdown of user data, including chain and token information.
-    
-    Returns:
-        df (pd.DataFrame): A DataFrame containing the user data breakdown, or None if an error occurs.
+    Fetches aggregated token and chain data associated with a specific user.
     """
     query = """
+    WITH user_portfolio_aggregation AS (
+        SELECT 
+            up.chain AS chain_id,
+            SUM(up.total_usd_value) AS aggregated_usd_value
+        FROM 
+            UserPortfolio up
+        WHERE up.user_id = %s
+        GROUP BY up.chain
+    ),
+    wallet_chain_data AS (
+        SELECT 
+            wcb.chain_id,
+            SUM(wcb.usd_value) AS reported_usd_value
+        FROM 
+            WalletChainBalances wcb
+        JOIN 
+            UserWallets uw ON wcb.wallet_address = uw.wallet_address
+        WHERE uw.user_id = %s
+        GROUP BY wcb.chain_id
+    )
     SELECT 
-        up.user_id,
-        up.wallet_address,
-        up.total_usd_value,
-        up.chain as chain_name,
-        t.name as token_name,
-        up.total_token_amount as token_amount
+        upa.chain_id,
+        upa.aggregated_usd_value,
+        wcd.reported_usd_value
     FROM 
-        UserPortfolio up
-    JOIN Tokens t ON up.token_id = t.id
-    WHERE up.user_id = %s;
-    """
-
-    df = None
-
-    try:
-        with psycopg2.connect(DATABASE_URL) as conn:
-            with conn.cursor() as cursor:   # Add this line to define the cursor within the context
-                cursor.execute(query, (user_id,))
-                rows = cursor.fetchall()
-                df = pd.DataFrame(rows, columns=[desc[0] for desc in cursor.description])
-    except Exception as e:
-        print(f"Error fetching user data with chain breakdown: {e}")
-
-    return df
-
-def fetch_chain_data_for_user(user_id):
-    """
-    Fetches chain data associated with a specific user.
-    """
-    query = """
-    SELECT 
-        c.name AS chain_name,
-        c.usd_value AS reported_usd_value
-    FROM 
-        Chains c
-    JOIN 
-        Wallets w ON c.wallet_address = w.address
-    JOIN 
-        UserWallets uw ON w.address = uw.wallet_address
-    WHERE uw.user_id = %s;
+        user_portfolio_aggregation upa
+    LEFT JOIN 
+        wallet_chain_data wcd ON upa.chain_id = wcd.chain_id;
     """
 
     df = None
     try:
         with psycopg2.connect(DATABASE_URL) as conn:
             with conn.cursor() as cursor:
-                cursor.execute(query, (user_id,))
+                cursor.execute(query, (user_id, user_id))
                 rows = cursor.fetchall()
                 df = pd.DataFrame(rows, columns=[desc[0] for desc in cursor.description])
     except Exception as e:
-        print(f"Error fetching chain data: {e}")
-
-    # Debugging line to see the data being fetched
-    print("Chain Data for User:", df)
+        print(f"Error fetching aggregated data: {e}")
 
     return df
 
@@ -285,26 +266,21 @@ def get_data_from_table(table_name, user_id=None):
 
 def get_tokens_for_user(user_id):
     """Fetches tokens for a specific user from the UserPortfolio table."""
-    query = f"""
+    query = """
     SELECT 
-        up.user_id, up.token_id, up.wallet_address, up.name, up.total_token_amount, up.total_usd_value, up.timestamp, up.updated_at,
-        t.is_verified, t.is_core, t.is_wallet 
+        up.user_id, up.token_id, up.wallet_address, up.chain, up.name, up.total_token_amount, 
+        up.total_usd_value, up.timestamp, up.updated_at, t.is_verified, t.is_core, t.is_wallet 
     FROM UserPortfolio up
     JOIN Tokens t ON up.token_id = t.id
     WHERE up.user_id = %s;
     """
     rows = execute_query_with_result(query, (user_id,))
     
-    columns = ["user_id", "token_id", "wallet_address", "name", "total_token_amount", "total_usd_value", "timestamp", "updated_at", 
-               "is_verified", "is_core", "is_wallet"]
+    columns = ["user_id", "token_id", "wallet_address", "chain", "name", "total_token_amount", 
+               "total_usd_value", "timestamp", "updated_at", "is_verified", "is_core", "is_wallet"]
     df = pd.DataFrame(rows, columns=columns)
     
     return df
-
-
-
-
-
 
 def get_tokens_for_user_without_spam(user_id, tokens_for_address_df):
     """Fetches tokens for a user excluding the spam tokens for a given address, returning a DataFrame."""
