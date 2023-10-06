@@ -40,7 +40,13 @@ def drop_specific_tables(tables_to_drop):
         "UserPortfolio_history", 
         "UserSpamFilters", 
         "UserWallets", 
-        "users"
+        "users",
+        "NFTs",
+        "NFTs_history"
+        "Attributes",
+        "Attributes_history",
+        "bitcoin_addresses",
+        "bitcoin_addresses_history"
     ]
     
     for table in tables_to_drop:
@@ -48,7 +54,7 @@ def drop_specific_tables(tables_to_drop):
             execute_query(f'DROP TABLE IF EXISTS {table} CASCADE;')
         else:
             print(f"Table {table} is not a valid table name and was not dropped.")
-            
+
 def drop_tables():
     execute_query('''
         DROP TABLE IF EXISTS Tokens_History CASCADE;
@@ -65,6 +71,8 @@ def drop_tables():
         DROP TABLE IF EXISTS Userportfolio_history CASCADE;
         DROP TABLE IF EXISTS UserSpamFilters CASCADE;
         DROP TABLE IF EXISTS UserWallets CASCADE;
+        DROP TABLE IF EXISTS NFTs CASCADE;
+        
     ''')
 
 def initialize_db():
@@ -136,8 +144,99 @@ def initialize_db():
             timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
         );
+    ''')
+    
+    # NFT table initialization
+    execute_query('''
+        CREATE TABLE IF NOT EXISTS NFTs (
+        id VARCHAR PRIMARY KEY,
+        contract_id VARCHAR,
+        inner_id INT,
+        chain VARCHAR,
+        name VARCHAR,
+        description TEXT,
+        content_type VARCHAR,
+        content VARCHAR,
+        thumbnail_url VARCHAR,
+        total_supply INT,
+        detail_url VARCHAR,    
+        collection_id VARCHAR,
+        contract_name VARCHAR,
+        is_erc721 BOOLEAN,
+        is_erc1155 BOOLEAN,
+        amount INT,
+        usd_price DECIMAL(10,3),
+        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
+        );
                               
     ''')
+
+    # Attributes table initialization
+    execute_query('''
+        attribute_id SERIAL PRIMARY KEY,
+        nft_id VARCHAR REFERENCES nfts(id),
+        key VARCHAR,
+        trait_type VARCHAR,
+        value VARCHAR,
+        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
+        );
+    ''')
+
+    execute_query('''
+    CREATE TABLE IF NOT EXISTS bitcoin_addresses (
+        address VARCHAR PRIMARY KEY,
+        received BIGINT,
+        sent BIGINT,
+        balance BIGINT,
+        tx_count INT,
+        unconfirmed_tx_count INT,
+        unconfirmed_received BIGINT,
+        unconfirmed_sent BIGINT,
+        unspent_tx_count INT,
+        first_tx VARCHAR,
+        last_tx VARCHAR
+        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
+    );
+''')
+    execute_query('''
+    CREATE TABLE IF NOT EXISTS Tokens_sol (
+        associated_token_address VARCHAR PRIMARY KEY,
+        mint VARCHAR,
+        amount_raw VARCHAR,
+        amount DECIMAL,
+        decimals VARCHAR,
+        name VARCHAR,
+        symbol VARCHAR,
+        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
+    );
+''')
+    execute_query('''
+    CREATE TABLE IF NOT EXISTS NFTs_sol (
+        associated_token_address VARCHAR PRIMARY KEY,
+        mint VARCHAR,
+        amount_raw VARCHAR,
+        amount DECIMAL,
+        decimals VARCHAR,
+        name VARCHAR,
+        symbol VARCHAR,
+        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
+    );
+''')
+    execute_query('''
+    CREATE TABLE IF NOT EXISTS Native_Balance_sol (
+        user_id SERIAL PRIMARY KEY,  -- Assuming each user has a unique ID
+        lamports VARCHAR,
+        solana DECIMAL, 
+        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
+    );
+''')
+                  
        # WalletChainBalances table initialization
     execute_query('''
         CREATE TABLE IF NOT EXISTS WalletChainBalances (
@@ -189,7 +288,7 @@ def initialize_db():
     create_updated_at_trigger()
 
 def initialize_history_tables():
-    history_tables = ["Wallets", "Chains", "Tokens", "UserPortfolio", "WalletChainBalances", "WalletTokenBalances"]
+    history_tables = ["Wallets", "Chains", "Tokens", "NFTs", "UserPortfolio", "WalletChainBalances", "WalletTokenBalances", "Attributes","bitcoin_addresses"]
     for table in history_tables:
         execute_query(f'''
             CREATE TABLE IF NOT EXISTS {table}_History AS
@@ -257,43 +356,128 @@ def initialize_specific_tables(tables_to_init):
                 timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
             );
-        ''',
-        "WalletChainBalances": '''
-            CREATE TABLE IF NOT EXISTS WalletChainBalances (
-                wallet_address VARCHAR(255) REFERENCES Wallets(address),
-                chain_id VARCHAR(255),
-                usd_value NUMERIC,
-                PRIMARY KEY (wallet_address, chain_id)
-            );
-        ''',
-        "WalletTokenBalances": '''
-            CREATE TABLE IF NOT EXISTS WalletTokenBalances (
-                wallet_address VARCHAR REFERENCES Wallets(address),
-                token_id VARCHAR REFERENCES Tokens(id),
-                amount NUMERIC,
-                PRIMARY KEY (wallet_address, token_id)
-            );
-        ''',
-        "UserSpamFilters": '''
-            CREATE TABLE IF NOT EXISTS UserSpamFilters (
-                user_id VARCHAR PRIMARY KEY REFERENCES users(user_id),
-                spam_tokens VARCHAR[]
-            );
-        ''',
-        "UserPortfolio": '''
-            CREATE TABLE IF NOT EXISTS UserPortfolio (
-                user_id VARCHAR REFERENCES users(user_id),
-                token_id VARCHAR REFERENCES Tokens(id),
-                wallet_address VARCHAR REFERENCES Wallets(address),
+                ''',
+        "NFTs": '''
+                CREATE TABLE IF NOT EXISTS NFTs (
+                id VARCHAR PRIMARY KEY,
+                contract_id VARCHAR,
+                inner_id INT,
                 chain VARCHAR,
-                name VARCHAR(255),
-                total_token_amount NUMERIC(30, 15),
-                total_usd_value NUMERIC(30, 15),
+                name VARCHAR,
+                description TEXT,
+                content_type VARCHAR,
+                content VARCHAR,
+                thumbnail_url VARCHAR,
+                total_supply INT,
+                detail_url VARCHAR,    
+                collection_id VARCHAR,
+                contract_name VARCHAR,
+                is_erc721 BOOLEAN,
+                is_erc1155 BOOLEAN,
+                amount INT,
+                usd_price DECIMAL(10,3),
                 timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-                PRIMARY KEY (user_id, token_id, wallet_address)
-            );
-        '''
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
+                );
+                                    
+                ''' ,
+
+        "Attributes": '''
+                attribute_id SERIAL PRIMARY KEY,
+                nft_id VARCHAR REFERENCES nfts(id),
+                key VARCHAR,
+                trait_type VARCHAR,
+                value VARCHAR,
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
+                );
+
+                ''' ,
+        "bitcoin_addresses": '''
+                address VARCHAR PRIMARY KEY,
+                received BIGINT,
+                sent BIGINT,
+                balance BIGINT,
+                tx_count INT,
+                unconfirmed_tx_count INT,
+                unconfirmed_received BIGINT,
+                unconfirmed_sent BIGINT,
+                unspent_tx_count INT,
+                first_tx VARCHAR,
+                last_tx VARCHAR
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
+                );
+                ''',
+        "Tokens_sol": '''
+                associated_token_address VARCHAR PRIMARY KEY,
+                mint VARCHAR,
+                amount_raw VARCHAR,
+                amount DECIMAL,
+                decimals VARCHAR,
+                name VARCHAR,
+                symbol VARCHAR,
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
+                );
+                ''',
+        "NFTs_sol": '''
+                associated_token_address VARCHAR PRIMARY KEY,
+                mint VARCHAR,
+                amount_raw VARCHAR,
+                amount DECIMAL,
+                decimals VARCHAR,
+                name VARCHAR,
+                symbol VARCHAR,
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
+                );
+                ''',
+        "Native_Balance_sol": '''
+                user_id SERIAL PRIMARY KEY,
+                lamports VARCHAR,
+                solana DECIMAL,
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
+                );
+                ''',
+                    
+        "WalletChainBalances": '''
+                    CREATE TABLE IF NOT EXISTS WalletChainBalances (
+                        wallet_address VARCHAR(255) REFERENCES Wallets(address),
+                        chain_id VARCHAR(255),
+                        usd_value NUMERIC,
+                        PRIMARY KEY (wallet_address, chain_id)
+                    );
+                ''',
+        "WalletTokenBalances": '''
+                    CREATE TABLE IF NOT EXISTS WalletTokenBalances (
+                        wallet_address VARCHAR REFERENCES Wallets(address),
+                        token_id VARCHAR REFERENCES Tokens(id),
+                        amount NUMERIC,
+                        PRIMARY KEY (wallet_address, token_id)
+                    );
+                ''',
+        "UserSpamFilters": '''
+                    CREATE TABLE IF NOT EXISTS UserSpamFilters (
+                        user_id VARCHAR PRIMARY KEY REFERENCES users(user_id),
+                        spam_tokens VARCHAR[]
+                    );
+                ''',
+        "UserPortfolio": '''
+                    CREATE TABLE IF NOT EXISTS UserPortfolio (
+                        user_id VARCHAR REFERENCES users(user_id),
+                        token_id VARCHAR REFERENCES Tokens(id),
+                        wallet_address VARCHAR REFERENCES Wallets(address),
+                        chain VARCHAR,
+                        name VARCHAR(255),
+                        total_token_amount NUMERIC(30, 15),
+                        total_usd_value NUMERIC(30, 15),
+                        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                        PRIMARY KEY (user_id, token_id, wallet_address)
+                    );
+                '''
     }
 
     for table in tables_to_init:
@@ -314,7 +498,7 @@ def create_updated_at_trigger():
     ''')
 
     # Create the triggers for the necessary tables
-    tables_with_update_time = ["Wallets", "Chains", "Tokens"]
+    tables_with_update_time = ["Wallets", "Chains", "Tokens", "WalletChainBalances", "WalletTokenBalances", "UserPortfolio", "NFTs", "Attributes", "bitcoin_addresses", "Tokens_sol", "NFTs_sol", "Native_Balance_sol"]
     for table in tables_with_update_time:
         # Check if the trigger already exists
         result = execute_query_with_result(f'''
@@ -333,7 +517,7 @@ def create_updated_at_trigger():
             ''')
 
 def create_backup_triggers():
-    backup_tables = ["Wallets", "Chains", "Tokens", "WalletChainBalances", "WalletTokenBalances", "UserPortfolio"]
+    backup_tables = ["Wallets", "Chains", "Tokens", "WalletChainBalances", "WalletTokenBalances", "UserPortfolio", "NFTs", "Attributes", "bitcoin_addresses", "Tokens_sol", "NFTs_sol", "Native_Balance_sol"]
     for table in backup_tables:
         # Check if history table exists
         result = execute_query_with_result(f'''
